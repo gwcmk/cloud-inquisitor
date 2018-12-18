@@ -60,7 +60,7 @@ function VpcListController(MetadataService, Utils) {
             isDefault: {
                 type: 'select',
                 label: 'VPC Type',
-                multiple: false,
+                multiple: true,
                 values: {
                     'default' : 'true',
                     'user-defined' : 'false'
