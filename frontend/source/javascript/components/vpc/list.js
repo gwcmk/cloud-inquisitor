@@ -64,7 +64,7 @@ function VpcListController(MetadataService, Utils) {
                 values: {
                     'default' : 'true',
                     'user-defined' : 'false'
-                }.
+                },
                 selected: vm.params.isDefault
             },
             cidrV4: {
