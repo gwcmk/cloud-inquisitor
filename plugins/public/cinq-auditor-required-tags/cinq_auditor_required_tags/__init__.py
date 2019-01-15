@@ -456,7 +456,7 @@ class RequiredTagsAuditor(BaseAuditor):
         for key in [tag.lower() for tag in required_tags]:
             if key not in resource_tags:
                 missing_tags.append(key)
-            elif not validate_tag(key, resource_tags[key]):
+            elif not self.validate_tag(key, resource_tags[key]):
                 missing_tags.append(key)
                 notes.append('{} tag is not valid'.format(key))
 
@@ -464,7 +464,7 @@ class RequiredTagsAuditor(BaseAuditor):
         if 'max-age' in missing_tags and 'data_retention' in resource_tags:
             missing_tags.remove('max-age')
             notes.remove('max-age tag is not valid')
-            if not validate_tag('data_retention', resource_tags['data_retention']):
+            if not self.validate_tag('data_retention', resource_tags['data_retention']):
                 missing_tags.append('data_retention')
                 notes.append('data_retention tag is not valid')
 
