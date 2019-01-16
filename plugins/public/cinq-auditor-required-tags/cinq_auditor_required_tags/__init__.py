@@ -60,7 +60,7 @@ class RequiredTagsAuditor(BaseAuditor):
         ConfigOption('required_tags', ['owner', 'accounting', 'name'], 'array', 'List of required tags'),
         ConfigOption('lifecycle_expiration_days', 3, 'int',
                      'How many days we should set in the bucket policy for non-empty S3 buckets removal'),
-        ConfigOption('gdpr_accounts', ['riotweb', 'riotweb-test', 'rcloud', 'rcloud-sandbox'], 'array', 'List of accounts requiring GDPR compliance')
+        ConfigOption('gdpr_accounts', [], 'array', 'List of accounts requiring GDPR compliance')
     )
 
     def __init__(self):
@@ -84,7 +84,7 @@ class RequiredTagsAuditor(BaseAuditor):
             resource_type.resource_type_id: resource_type.resource_type
             for resource_type in db.ResourceType.find()
         }
-        self.gdpr_accounts = dbconfig.get('gdpr_accounts', self.ns, ['riotweb', 'riotweb-test', 'rcloud', 'rcloud-sandbox'])
+        self.gdpr_accounts = dbconfig.get('gdpr_accounts', self.ns, [])
 
     def run(self, *args, **kwargs):
         known_issues, new_issues, fixed_issues = self.get_resources()
