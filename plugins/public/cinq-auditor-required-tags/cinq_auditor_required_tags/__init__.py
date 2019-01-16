@@ -440,7 +440,7 @@ class RequiredTagsAuditor(BaseAuditor):
         if self.audit_ignore_tag.lower() in resource_tags:
             return missing_tags, notes
 
-        required_tags = self.required_tags
+        required_tags = list(self.required_tags)
 
         # Add GDPR tags to required tags if the account must be GDPR compliant
         if resource.account.account_name in self.gdpr_accounts:
