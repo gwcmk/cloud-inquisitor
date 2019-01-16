@@ -463,7 +463,6 @@ class RequiredTagsAuditor(BaseAuditor):
         # Support deprecated "data_retention" tag as a replacement for "max-age"
         if 'max-age' in missing_tags and 'data_retention' in resource_tags:
             missing_tags.remove('max-age')
-            notes.remove('max-age tag is not valid')
             if not self.validate_tag('data_retention', resource_tags['data_retention']):
                 missing_tags.append('data_retention')
                 notes.append('data_retention tag is not valid')
