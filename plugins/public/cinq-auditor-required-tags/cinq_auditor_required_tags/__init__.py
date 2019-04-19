@@ -4,10 +4,9 @@ from datetime import datetime
 
 import pytimeparse
 from cinq_auditor_required_tags.providers import process_action
-from cloud_inquisitor.constants import ActionStatus
-
 from cloud_inquisitor import CINQ_PLUGINS
 from cloud_inquisitor.config import dbconfig, ConfigOption
+from cloud_inquisitor.constants import ActionStatus
 from cloud_inquisitor.constants import NS_AUDITOR_REQUIRED_TAGS, NS_GOOGLE_ANALYTICS, NS_EMAIL, AuditActions
 from cloud_inquisitor.database import db
 from cloud_inquisitor.plugins import BaseAuditor
@@ -26,6 +25,7 @@ class RequiredTagsAuditor(BaseAuditor):
     collect_only = None
     start_delay = 0
     options = (
+        ConfigOption('action_taker_arn', '', 'string', 'Lambda entry point for action taker'),
         ConfigOption(
             'alert_settings', {
                 '*': {
@@ -42,7 +42,16 @@ class RequiredTagsAuditor(BaseAuditor):
             'audit_scope',
             # max_items is 99 here, but is pulled during runtime and adjusted to the
             #  max number of available resources it doesn't really matter what we put
-            {'enabled': [], 'available': ['aws_ec2_instance'], 'max_items': 99, 'min_items': 0},
+            {
+                'enabled': [],
+                'available': [
+                    'aws_ec2_instance',
+                    'aws_s3_bucket',
+                    'aws_rds_instance'
+                ],
+                'max_items': 99,
+                'min_items': 0
+            },
             'choice',
             'Select the services you would like to audit'
         ),
@@ -53,6 +62,8 @@ class RequiredTagsAuditor(BaseAuditor):
         ConfigOption('email_subject', 'Required tags audit notification', 'string',
                      'Subject of the email notification'),
         ConfigOption('enabled', False, 'bool', 'Enable the Required Tags auditor'),
+        ConfigOption('enable_delete_s3_buckets', True, 'bool',
+                     'Enable actual S3 bucket deletion. This might cause domain hijacking'),
         ConfigOption('grace_period', 4, 'int', 'Only audit resources X minutes after being created'),
         ConfigOption('interval', 30, 'int', 'How often the auditor executes, in minutes.'),
         ConfigOption('partial_owner_match', True, 'bool', 'Allow partial matches of the Owner tag'),
@@ -160,19 +171,24 @@ class RequiredTagsAuditor(BaseAuditor):
             else:
                 fixed_issues.append(existing_issue)
 
-        new_issues = {
-            resource_id: resource for resource_id, resource in found_issues.items()
-            if
-            ((datetime.utcnow() - resource[
-                'resource'].resource_creation_date).total_seconds() // 3600) >= self.grace_period
-        }
+        new_issues = {}
+        for resource_id, resource in found_issues.items():
+            try:
+                if (
+                        (datetime.utcnow() - resource['resource'].resource_creation_date).total_seconds() // 3600
+                ) >= self.grace_period:
+                    new_issues[resource_id] = resource
+            except Exception as ex:
+                self.log.error(
+                    'Failed to construct new issue {}, Error: {}'.format(resource_id, ex)
+                )
+
         db.session.commit()
         return known_issues, new_issues, fixed_issues
 
     def create_new_issues(self, new_issues):
         try:
             for non_compliant_resource in new_issues.values():
-
                 properties = {
                     'resource_id': non_compliant_resource['resource_id'],
                     'account_id': non_compliant_resource['resource'].account_id,
@@ -325,6 +341,13 @@ class RequiredTagsAuditor(BaseAuditor):
         db.session.commit()
         return action_item
 
+    def process_action(self, resource, action):
+        return process_action(
+            resource,
+            action,
+            self.ns
+        )
+
     def process_actions(self, actions):
         """Process the actions we want to take
 
@@ -342,19 +365,17 @@ class RequiredTagsAuditor(BaseAuditor):
 
             try:
                 if action['action'] == AuditActions.REMOVE:
-                    action_status = process_action(
+                    action_status = self.process_action(
                         resource,
-                        AuditActions.REMOVE,
-                        self.ns
+                        AuditActions.REMOVE
                     )
                     if action_status == ActionStatus.SUCCEED:
                         db.session.delete(action['issue'].issue)
 
                 elif action['action'] == AuditActions.STOP:
-                    action_status = process_action(
-                            resource,
-                            AuditActions.STOP,
-                            self.ns
+                    action_status = self.process_action(
+                        resource,
+                        AuditActions.STOP
                     )
                     if action_status == ActionStatus.SUCCEED:
                         action['issue'].update({
